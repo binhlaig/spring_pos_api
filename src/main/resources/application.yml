@@ -1,3 +1,4 @@
+#
 #server:
 #  port: 8080
 #
@@ -6,23 +7,14 @@
 #    url: jdbc:postgresql://localhost:5432/posdb
 #    username: posuser
 #    password: pospass
-#    jpa:
+#
+#  jpa:
+#    hibernate:
+#      ddl-auto: validate
+#    properties:
 #      hibernate:
-#        ddl-auto: update
-#    flyway:
-#      enabled: false
-#
-#
-#
-#  #  jpa:
-##    hibernate:
-##      ddl-auto: validate
-##    properties:
-##      hibernate:
-##        format_sql: true
-##    open-in-view: false
-#
-#
+#        format_sql: true
+#    open-in-view: false
 #
 #  flyway:
 #    enabled: true
@@ -42,6 +34,12 @@
 #  jwt:
 #    secret: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_32+CHARS"
 #    expiresMinutes: 1440
+#  upload:
+#    dir: ./uploads
+#
+#
+
+
 
 
 server:
@@ -49,7 +47,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/posdb
+    url: jdbc:postgresql://db:5432/posdb
     username: posuser
     password: pospass
 
@@ -80,6 +78,4 @@ app:
     secret: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_32+CHARS"
     expiresMinutes: 1440
   upload:
-    dir: ./uploads
-
-
+    dir: /app/uploads

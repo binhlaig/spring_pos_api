@@ -1,17 +1,189 @@
-package com.binhlaig.pos.modules.product;
-
+//
+//package com.binhlaig.pos.modules.product;
+//
+//import jakarta.persistence.LockModeType;
 //import org.springframework.data.jpa.repository.JpaRepository;
+//import org.springframework.data.jpa.repository.Lock;
+//import org.springframework.data.jpa.repository.Query;
+//import org.springframework.data.repository.query.Param;
+//
+//import java.util.List;
+//import java.util.Optional;
 //
 //public interface ProductRepository extends JpaRepository<Product, Long> {
+//
+//    // Existing methods
 //    boolean existsBySku(String sku);
+//
+//    Optional<Product> findBySku(String sku);
+//
+//    // Search
+//    List<Product> findByProductNameContainingIgnoreCase(String productName);
+//
+//    // Current user created products
+//    List<Product> findByCreatedByUserId(Long createdByUserId);
+//
+//    List<Product> findByCreatedByUserIdAndProductNameContainingIgnoreCase(
+//            Long createdByUserId,
+//            String productName
+//    );
+//
+//    // Current shop products by shop_id
+//    List<Product> findByShopId(Long shopId);
+//
+//    List<Product> findByShopIdAndProductNameContainingIgnoreCase(
+//            Long shopId,
+//            String productName
+//    );
+//
+//    // Current shop products by shop_code
+//    List<Product> findByShopCode(String shopCode);
+//
+//    List<Product> findByShopCodeAndProductNameContainingIgnoreCase(
+//            String shopCode,
+//            String productName
+//    );
+//
+//    // ----------------------------------------------------------------
+//    // Receipt / POS sale stock update
+//    // ----------------------------------------------------------------
+//
+//    Optional<Product> findByIdAndShopId(Long id, Long shopId);
+//
+//    Optional<Product> findByBarcodeAndShopId(String barcode, Long shopId);
+//
+//    // ----------------------------------------------------------------
+//    // Stock update with DB row lock
+//    // Sale တစ်ပြိုင်နက်တည်းဖြစ်ရင် stock မှားမလျော့အောင် lock ချမယ်
+//    // ----------------------------------------------------------------
+//
+//    @Lock(LockModeType.PESSIMISTIC_WRITE)
+//    @Query("""
+//           SELECT p
+//           FROM Product p
+//           WHERE p.id = :id
+//             AND p.shopId = :shopId
+//           """)
+//    Optional<Product> findByIdAndShopIdForUpdate(
+//            @Param("id") String id,
+//            @Param("shopId") Long shopId
+//    );
+//
+//    @Lock(LockModeType.PESSIMISTIC_WRITE)
+//    @Query("""
+//           SELECT p
+//           FROM Product p
+//           WHERE p.barcode = :barcode
+//             AND p.shopId = :shopId
+//           """)
+//    Optional<Product> findByBarcodeAndShopIdForUpdate(
+//            @Param("barcode") String barcode,
+//            @Param("shopId") Long shopId
+//    );
 //}
 
 
-import org.springframework.data.jpa.repository.JpaRepository;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+package com.binhlaig.pos.modules.product;
+
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
 import java.util.Optional;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
+
+    // Existing methods
     boolean existsBySku(String sku);
+
     Optional<Product> findBySku(String sku);
+
+    // Search
+    List<Product> findByProductNameContainingIgnoreCase(String productName);
+
+    // Current user created products
+    List<Product> findByCreatedByUserId(Long createdByUserId);
+
+    List<Product> findByCreatedByUserIdAndProductNameContainingIgnoreCase(
+            Long createdByUserId,
+            String productName
+    );
+
+    // Current shop products by shop_id
+    List<Product> findByShopId(Long shopId);
+
+    List<Product> findByShopIdAndProductNameContainingIgnoreCase(
+            Long shopId,
+            String productName
+    );
+
+    // Current shop products by shop_code
+    List<Product> findByShopCode(String shopCode);
+
+    List<Product> findByShopCodeAndProductNameContainingIgnoreCase(
+            String shopCode,
+            String productName
+    );
+
+    // ----------------------------------------------------------------
+    // Receipt / POS sale stock update
+    // ----------------------------------------------------------------
+
+    Optional<Product> findByIdAndShopId(Long id, Long shopId);
+
+    Optional<Product> findByBarcodeAndShopId(String barcode, Long shopId);
+
+    // ----------------------------------------------------------------
+    // Stock update with DB row lock
+    // Sale တစ်ပြိုင်နက်တည်းဖြစ်ရင် stock မှားမလျော့အောင် lock ချမယ်
+    // ----------------------------------------------------------------
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+           SELECT p
+           FROM Product p
+           WHERE p.id = :id
+             AND p.shopId = :shopId
+           """)
+    Optional<Product> findByIdAndShopIdForUpdate(
+            @Param("id") Long id,
+            @Param("shopId") Long shopId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+           SELECT p
+           FROM Product p
+           WHERE p.barcode = :barcode
+             AND p.shopId = :shopId
+           """)
+    Optional<Product> findByBarcodeAndShopIdForUpdate(
+            @Param("barcode") String barcode,
+            @Param("shopId") Long shopId
+    );
 }

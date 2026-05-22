@@ -1,150 +1,399 @@
+//
 //package com.binhlaig.pos.auth;
 //
-//import com.binhlaig.pos.auth.dto.*;
-//import com.binhlaig.pos.auth.jwt.JwtService;
+//import com.binhlaig.pos.auth.dto.AuthResponse;
+//import com.binhlaig.pos.auth.dto.LoginRequest;
+//import com.binhlaig.pos.auth.dto.RegisterMultipartRequest;
+//import com.binhlaig.pos.auth.dto.RegisterResponse;
+//import com.binhlaig.pos.auth.dto.StaffLoginRequest;
+//import com.binhlaig.pos.staff.entity.Staff;
+//import com.binhlaig.pos.staff.repository.StaffRepository;
+//import com.binhlaig.pos.storage.FileStorageService;
+//import com.binhlaig.pos.user.User;
+//import com.binhlaig.pos.user.UserRepository;
 //import lombok.RequiredArgsConstructor;
-//import org.springframework.security.authentication.*;
+//import org.springframework.security.authentication.AuthenticationManager;
+//import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 //import org.springframework.security.crypto.password.PasswordEncoder;
 //import org.springframework.stereotype.Service;
-//import org.springframework.transaction.annotation.Transactional;
 //import org.springframework.web.multipart.MultipartFile;
-//
-//import java.util.Set;
 //
 //@Service
 //@RequiredArgsConstructor
 //public class AuthService {
 //
-//    private final UserRepository repo;
-//    private final PasswordEncoder encoder;
-//    private final AuthenticationManager authManager;
+//    private final UserRepository userRepository;
+//    private final StaffRepository staffRepository;
+//    private final PasswordEncoder passwordEncoder;
 //    private final JwtService jwtService;
+//    private final AuthenticationManager authenticationManager;
+//    private final FileStorageService fileStorageService;
 //
-//    @Transactional
-//    public void register(RegisterRequest req) {
-//        if (repo.existsByUsername(req.username())) {
-//            throw new IllegalArgumentException("Username already exists");
+//    public RegisterResponse registerMultipart(RegisterMultipartRequest req, MultipartFile image) throws Exception {
+//        String username = req.username() == null ? "" : req.username().trim();
+//        String password = req.password() == null ? "" : req.password().trim();
+//        String shopCode = req.shopCode() == null ? "" : req.shopCode().trim().toUpperCase();
+//        String shopName = req.shopName() == null ? "" : req.shopName().trim();
+//        String address = req.address() == null ? "" : req.address().trim();
+//
+//        if (username.isBlank()) {
+//            throw new RuntimeException("Username is required");
 //        }
 //
-//        var user = AppUser.builder()
-//                .username(req.username())
-//                .passwordHash(encoder.encode(req.password()))
-//                .roles(Set.of(Role.ADMIN)) // default: ADMIN (နောက်မှ cashier create API လုပ်မယ်)
-//                .active(true)
+//        if (password.isBlank() || password.length() < 8) {
+//            throw new RuntimeException("Password must be at least 8 characters");
+//        }
+//
+//        if (req.shopId() == null || req.shopId() <= 0) {
+//            throw new RuntimeException("Valid shop ID is required");
+//        }
+//
+//        if (shopCode.isBlank()) {
+//            throw new RuntimeException("Shop code is required");
+//        }
+//
+//        if (shopName.isBlank()) {
+//            throw new RuntimeException("Shop name is required");
+//        }
+//
+//        if (address.isBlank()) {
+//            throw new RuntimeException("Address is required");
+//        }
+//
+//        if (userRepository.findByUsername(username).isPresent()) {
+//            throw new RuntimeException("Username already exists");
+//        }
+//
+//        String imageUrl = null;
+//        if (image != null && !image.isEmpty()) {
+//            imageUrl = fileStorageService.saveAvatarImage(image);
+//        }
+//
+//        User user = User.builder()
+//                .username(username)
+//                .password(passwordEncoder.encode(password))
+//                .role(req.role())
+//                .shopId(req.shopId())
+//                .shopCode(shopCode)
+//                .shopName(shopName)
+//                .address(address)
+//                .imageUrl(imageUrl)
 //                .build();
 //
-//        repo.save(user);
+//        userRepository.save(user);
+//
+//        return RegisterResponse.builder()
+//                .message("User registered successfully")
+//                .username(user.getUsername())
+//                .role(user.getRole().name())
+//                .shopId(user.getShopId())
+//                .shopCode(user.getShopCode())
+//                .shopName(user.getShopName())
+//                .address(user.getAddress())
+//                .imageUrl(user.getImageUrl())
+//                .build();
 //    }
-//
-//
-//
 //
 //    public AuthResponse login(LoginRequest req) {
-//        authManager.authenticate(
-//                new UsernamePasswordAuthenticationToken(req.username(), req.password())
+//        String username = req.username() == null ? "" : req.username().trim();
+//        String password = req.password() == null ? "" : req.password().trim();
+//        String requestShopCode = req.shopCode() == null ? "" : req.shopCode().trim().toUpperCase();
+//
+//        if (username.isBlank()) {
+//            throw new RuntimeException("Username is required");
+//        }
+//
+//        if (password.isBlank()) {
+//            throw new RuntimeException("Password is required");
+//        }
+//
+//        if (requestShopCode.isBlank()) {
+//            throw new RuntimeException("Shop code is required");
+//        }
+//
+//        authenticationManager.authenticate(
+//                new UsernamePasswordAuthenticationToken(username, password)
 //        );
 //
-//        var user = repo.findByUsername(req.username())
-//                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+//        User user = userRepository.findByUsername(username)
+//                .orElseThrow(() -> new RuntimeException("User not found"));
 //
-//        String token = jwtService.generate(user.getUsername(), user.getRoles());
-//        return new AuthResponse(token, "Bearer");
+//        String userShopCode = user.getShopCode() == null ? "" : user.getShopCode().trim().toUpperCase();
+//
+//        if (!userShopCode.equals(requestShopCode)) {
+//            throw new RuntimeException("Invalid shop code");
+//        }
+//
+//        String token = jwtService.generateToken(user);
+//
+//        return AuthResponse.builder()
+//                .token(token)
+//                .tokenType("Bearer")
+//                .username(user.getUsername())
+//                .role(user.getRole().name())
+//                .shopId(user.getShopId())
+//                .shopCode(user.getShopCode())
+//                .imageUrl(user.getImageUrl())
+//                .build();
 //    }
+//
+//    public AuthResponse staffLogin(StaffLoginRequest req) {
+//        String shopCode = req.getShopCode() == null ? "" : req.getShopCode().trim().toUpperCase();
+//        Long staffId = req.getStaffId();
+//        String password = req.getPassword() == null ? "" : req.getPassword().trim();
+//
+//        if (shopCode.isBlank()) {
+//            throw new RuntimeException("Shop code is required");
+//        }
+//
+//        if (staffId == null) {
+//            throw new RuntimeException("Staff ID is required");
+//        }
+//
+//        if (password.isBlank()) {
+//            throw new RuntimeException("Password is required");
+//        }
+//
+//        Staff staff = staffRepository.findByShopCodeAndStaffId(shopCode, staffId)
+//                .orElseThrow(() -> new RuntimeException("Invalid shop code or staff ID"));
+//
+//        if (!passwordEncoder.matches(password, staff.getPassword())) {
+//            throw new RuntimeException("Invalid password");
+//        }
+//
+//        if (staff.getStatus() != null && staff.getStatus().equalsIgnoreCase("inactive")) {
+//            throw new RuntimeException("Your account is inactive");
+//        }
+//
+//        String token = jwtService.generateStaffToken(staff);
+//
+//        return AuthResponse.builder()
+//                .token(token)
+//                .tokenType("Bearer")
+//                .username(staff.getFullName())
+//                .role(staff.getRole())
+//                .shopId(staff.getShopId())
+//                .shopCode(staff.getShopCode())
+//                .staffId(staff.getStaffId())
+//                .imageUrl(staff.getImageUrl())
+//                .build();
+//    }
+//
+//
 //}
-//
-//
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 package com.binhlaig.pos.auth;
 
-import com.binhlaig.pos.auth.dto.*;
-import com.binhlaig.pos.auth.jwt.JwtService;
-import com.binhlaig.pos.common.UploadService;
+import com.binhlaig.pos.auth.dto.AuthResponse;
+import com.binhlaig.pos.auth.dto.LoginRequest;
+import com.binhlaig.pos.auth.dto.RegisterMultipartRequest;
+import com.binhlaig.pos.auth.dto.RegisterResponse;
+import com.binhlaig.pos.auth.dto.StaffLoginRequest;
+import com.binhlaig.pos.staff.entity.Staff;
+import com.binhlaig.pos.staff.repository.StaffRepository;
+import com.binhlaig.pos.storage.FileStorageService;
+import com.binhlaig.pos.user.User;
+import com.binhlaig.pos.user.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.*;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    private final UserRepository repo;
-    private final PasswordEncoder encoder;
-    private final AuthenticationManager authManager;
+    private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
+    private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AuthenticationManager authenticationManager;
+    private final FileStorageService fileStorageService;
 
-    // ✅ NEW: for avatar upload
-    private final UploadService uploadService;
+    public RegisterResponse registerMultipart(RegisterMultipartRequest req, MultipartFile image) throws Exception {
+        String username = req.username() == null ? "" : req.username().trim();
+        String password = req.password() == null ? "" : req.password().trim();
+        String shopCode = req.shopCode() == null ? "" : req.shopCode().trim().toUpperCase();
+        String shopName = req.shopName() == null ? "" : req.shopName().trim();
+        String address = req.address() == null ? "" : req.address().trim();
 
-    /**
-     * (Old) JSON register: keep if you still want JSON register later.
-     */
-    @Transactional
-    public void register(RegisterRequest req) {
-        if (repo.existsByUsername(req.username())) {
-            throw new IllegalArgumentException("Username already exists");
+        if (username.isBlank()) {
+            throw new RuntimeException("Username is required");
         }
 
-        var user = AppUser.builder()
-                .username(req.username())
-                .passwordHash(encoder.encode(req.password()))
-                .roles(Set.of(Role.ADMIN))
-                .active(true)
-                .build();
-
-        repo.save(user);
-    }
-
-    /**
-     * ✅ NEW: Multipart register (FormData) for frontend
-     * accepts: username, password, role, image(optional)
-     * returns: access_token + username + role + avatarPath
-     */
-    @Transactional
-    public RegisterResponse registerMultipart(RegisterMultipartRequest req, MultipartFile image) throws IOException {
-        if (repo.existsByUsername(req.username())) {
-            throw new IllegalArgumentException("Username already exists");
+        if (password.isBlank() || password.length() < 8) {
+            throw new RuntimeException("Password must be at least 8 characters");
         }
 
-        // Save avatar if provided
-        String avatarPath = uploadService.saveAvatar(image);
+        if (req.shopId() == null || req.shopId() <= 0) {
+            throw new RuntimeException("Valid shop ID is required");
+        }
 
-        var user = AppUser.builder()
-                .username(req.username())
-                .passwordHash(encoder.encode(req.password()))
-                .roles(Set.of(req.role()))       // ✅ role from frontend
-                .active(true)
-                .avatarPath(avatarPath)          // ✅ need field in AppUser
+        if (shopCode.isBlank()) {
+            throw new RuntimeException("Shop code is required");
+        }
+
+        if (shopName.isBlank()) {
+            throw new RuntimeException("Shop name is required");
+        }
+
+        if (address.isBlank()) {
+            throw new RuntimeException("Address is required");
+        }
+
+        if (userRepository.findByUsername(username).isPresent()) {
+            throw new RuntimeException("Username already exists");
+        }
+
+        String imageUrl = null;
+
+        if (image != null && !image.isEmpty()) {
+            imageUrl = fileStorageService.saveAvatarImage(image);
+        }
+
+        User user = User.builder()
+                .username(username)
+                .password(passwordEncoder.encode(password))
+                .role(req.role())
+                .shopId(req.shopId())
+                .shopCode(shopCode)
+                .shopName(shopName)
+                .address(address)
+                .imageUrl(imageUrl)
                 .build();
 
-        repo.save(user);
+        userRepository.save(user);
 
-        String token = jwtService.generate(user.getUsername(), user.getRoles());
-
-        return new RegisterResponse(
-                token,
-                user.getUsername(),
-                req.role().name(),
-                avatarPath
-        );
+        return RegisterResponse.builder()
+                .message("User registered successfully")
+                .username(user.getUsername())
+                .role(user.getRole().name())
+                .shopId(user.getShopId())
+                .shopCode(user.getShopCode())
+                .shopName(user.getShopName())
+                .address(user.getAddress())
+                .imageUrl(user.getImageUrl())
+                .build();
     }
 
     public AuthResponse login(LoginRequest req) {
-        authManager.authenticate(
-                new UsernamePasswordAuthenticationToken(req.username(), req.password())
+        String username = req.username() == null ? "" : req.username().trim();
+        String password = req.password() == null ? "" : req.password().trim();
+        String requestShopCode = req.shopCode() == null ? "" : req.shopCode().trim().toUpperCase();
+
+        if (username.isBlank()) {
+            throw new RuntimeException("Username is required");
+        }
+
+        if (password.isBlank()) {
+            throw new RuntimeException("Password is required");
+        }
+
+        if (requestShopCode.isBlank()) {
+            throw new RuntimeException("Shop code is required");
+        }
+
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(username, password)
         );
 
-        var user = repo.findByUsername(req.username())
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        String token = jwtService.generate(user.getUsername(), user.getRoles());
-        return new AuthResponse(token, "Bearer");
+        String userShopCode = user.getShopCode() == null ? "" : user.getShopCode().trim().toUpperCase();
+
+        if (!userShopCode.equals(requestShopCode)) {
+            throw new RuntimeException("Invalid shop code");
+        }
+
+        String token = jwtService.generateToken(user);
+
+        return AuthResponse.builder()
+                .token(token)
+                .tokenType("Bearer")
+                .username(user.getUsername())
+                .role(user.getRole().name())
+                .shopId(user.getShopId())
+                .shopCode(user.getShopCode())
+                .imageUrl(user.getImageUrl())
+                .build();
+    }
+
+    public AuthResponse staffLogin(StaffLoginRequest req) {
+        String shopCode = req.getShopCode() == null ? "" : req.getShopCode().trim().toUpperCase();
+        Long staffId = req.getStaffId();
+        String password = req.getPassword() == null ? "" : req.getPassword().trim();
+
+        if (shopCode.isBlank()) {
+            throw new RuntimeException("Shop code is required");
+        }
+
+        if (staffId == null) {
+            throw new RuntimeException("Staff ID is required");
+        }
+
+        if (password.isBlank()) {
+            throw new RuntimeException("Password is required");
+        }
+
+        Staff staff = staffRepository.findByShopCodeAndStaffId(shopCode, staffId)
+                .orElseThrow(() -> new RuntimeException("Invalid shop code or staff ID"));
+
+        if (staff.getPassword() == null || staff.getPassword().isBlank()) {
+            throw new RuntimeException("Staff password is not set");
+        }
+
+        if (!passwordEncoder.matches(password, staff.getPassword())) {
+            throw new RuntimeException("Invalid password");
+        }
+
+        if (staff.getStatus() != null && staff.getStatus().equalsIgnoreCase("inactive")) {
+            throw new RuntimeException("Your account is inactive");
+        }
+
+        User user = userRepository.findFirstByShopCodeIgnoreCase(shopCode)
+                .orElseThrow(() -> new RuntimeException("Shop user not found for shop code: " + shopCode));
+
+        if (user.getShopId() != null && staff.getShopId() != null && !user.getShopId().equals(staff.getShopId())) {
+            throw new RuntimeException("Staff does not belong to this shop");
+        }
+
+        String token = jwtService.generateStaffToken(staff, user);
+
+        return AuthResponse.builder()
+                .token(token)
+                .tokenType("Bearer")
+                .username(staff.getFullName())
+                .role(staff.getRole())
+                .shopId(staff.getShopId())
+                .shopCode(staff.getShopCode())
+                .staffId(staff.getStaffId())
+                .imageUrl(staff.getImageUrl())
+                .build();
     }
 }

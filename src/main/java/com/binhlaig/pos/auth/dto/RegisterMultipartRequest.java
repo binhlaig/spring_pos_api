@@ -1,11 +1,31 @@
+//
+////
+//package com.binhlaig.pos.auth.dto;
+//
+//import com.binhlaig.pos.auth.Role;
+//
+//public record RegisterMultipartRequest(
+//        String username,
+//        String password,
+//        Role role,
+//        Long shopId,
+//        String shopCode
+//) {
+//}
+
+
+
 package com.binhlaig.pos.auth.dto;
 
 import com.binhlaig.pos.auth.Role;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 public record RegisterMultipartRequest(
-        @NotBlank String username,
-        @NotBlank String password,
-        @NotNull Role role
-) {}
+        String username,
+        String password,
+        Role role,
+        Long shopId,
+        String shopCode,
+        String shopName,
+        String address
+) {
+}

@@ -1,7 +1,32 @@
+#services:
+#  db:
+#    image: postgres:16
+#    container_name: pos_db
+#    environment:
+#      POSTGRES_DB: posdb
+#      POSTGRES_USER: posuser
+#      POSTGRES_PASSWORD: pospass
+#    ports:
+#      - "5432:5432"
+#    volumes:
+#      - pos_pgdata:/var/lib/postgresql/data
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U posuser -d posdb"]
+#      interval: 5s
+#      timeout: 5s
+#      retries: 20
+#
+#volumes:
+#  pos_pg
+
+
+
+
 services:
   db:
     image: postgres:16
     container_name: pos_db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: posdb
       POSTGRES_USER: posuser
@@ -16,5 +41,22 @@ services:
       timeout: 5s
       retries: 20
 
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: pos_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8080:8080"
+    volumes:
+      - pos_uploads:/app/uploads
+
 volumes:
   pos_pgdata:
+  pos_uploads:
