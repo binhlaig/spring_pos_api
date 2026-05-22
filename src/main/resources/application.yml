@@ -1,62 +1,18 @@
-#
-#server:
-#  port: 8080
-#
-#spring:
-#  datasource:
-#    url: jdbc:postgresql://localhost:5432/posdb
-#    username: posuser
-#    password: pospass
-#
-#  jpa:
-#    hibernate:
-#      ddl-auto: validate
-#    properties:
-#      hibernate:
-#        format_sql: true
-#    open-in-view: false
-#
-#  flyway:
-#    enabled: true
-#    locations: classpath:db/migration
-#
-#logging:
-#  level:
-#    org.hibernate.SQL: debug
-#
-#management:
-#  endpoints:
-#    web:
-#      exposure:
-#        include: health,info
-#
-#app:
-#  jwt:
-#    secret: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_32+CHARS"
-#    expiresMinutes: 1440
-#  upload:
-#    dir: ./uploads
-#
-#
-
-
-
-
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   datasource:
-    url: jdbc:postgresql://db:5432/posdb
-    username: posuser
-    password: pospass
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/posdb}
+    username: ${SPRING_DATASOURCE_USERNAME:posuser}
+    password: ${SPRING_DATASOURCE_PASSWORD:pospass}
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${JPA_DDL_AUTO:update}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
     open-in-view: false
 
   flyway:
@@ -65,7 +21,7 @@ spring:
 
 logging:
   level:
-    org.hibernate.SQL: debug
+    org.hibernate.SQL: ${HIBERNATE_SQL_LOG_LEVEL:warn}
 
 management:
   endpoints:
@@ -75,7 +31,7 @@ management:
 
 app:
   jwt:
-    secret: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET_32+CHARS"
-    expiresMinutes: 1440
+    secret: ${APP_JWT_SECRET:CHANGE_ME_TO_A_LONG_RANDOM_SECRET_32_CHARS}
+    expiresMinutes: ${APP_JWT_EXPIRES_MINUTES:1440}
   upload:
-    dir: /app/uploads
+    dir: ${APP_UPLOAD_DIR:./uploads}

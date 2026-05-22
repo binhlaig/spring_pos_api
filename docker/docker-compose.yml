@@ -1,42 +1,20 @@
-#services:
-#  db:
-#    image: postgres:16
-#    container_name: pos_db
-#    environment:
-#      POSTGRES_DB: posdb
-#      POSTGRES_USER: posuser
-#      POSTGRES_PASSWORD: pospass
-#    ports:
-#      - "5432:5432"
-#    volumes:
-#      - pos_pgdata:/var/lib/postgresql/data
-#    healthcheck:
-#      test: ["CMD-SHELL", "pg_isready -U posuser -d posdb"]
-#      interval: 5s
-#      timeout: 5s
-#      retries: 20
-#
-#volumes:
-#  pos_pg
-
-
-
-
 services:
   db:
     image: postgres:16
     container_name: pos_db
     restart: unless-stopped
+    env_file:
+      - ../.env
     environment:
-      POSTGRES_DB: posdb
-      POSTGRES_USER: posuser
-      POSTGRES_PASSWORD: pospass
+      POSTGRES_DB: ${POSTGRES_DB:-posdb}
+      POSTGRES_USER: ${POSTGRES_USER:-posuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pospass}
     ports:
       - "5432:5432"
     volumes:
       - pos_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U posuser -d posdb"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -50,8 +28,17 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - ../.env
     environment:
-      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-posdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-posuser}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-pospass}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:-CHANGE_ME_TO_A_LONG_RANDOM_SECRET_32_CHARS}
+      APP_JWT_EXPIRES_MINUTES: ${APP_JWT_EXPIRES_MINUTES:-1440}
+      APP_UPLOAD_DIR: /app/uploads
+      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
     ports:
       - "8080:8080"
     volumes:
