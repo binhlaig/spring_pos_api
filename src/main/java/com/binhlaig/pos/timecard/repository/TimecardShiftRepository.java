@@ -137,9 +137,10 @@ public interface TimecardShiftRepository extends JpaRepository<TimecardShift, Lo
 
     Optional<TimecardShift> findFirstByEmployeeIdAndClockOutTimeIsNullOrderByClockInTimeDesc(Long employeeId);
 
+    Optional<TimecardShift> findByIdAndShopId(Long id, Long shopId);
+
     boolean existsByEmployeeIdAndWorkDateAndClockOutTimeIsNull(Long employeeId, LocalDate workDate);
 }
-
 
 
 

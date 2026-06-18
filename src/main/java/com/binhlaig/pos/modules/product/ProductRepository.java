@@ -123,6 +123,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     Optional<Product> findBySku(String sku);
 
+    boolean existsBySkuAndShopId(String sku, Long shopId);
+
+    Optional<Product> findBySkuAndShopId(String sku, Long shopId);
+
     // Search
     List<Product> findByProductNameContainingIgnoreCase(String productName);
 
@@ -136,6 +140,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     // Current shop products by shop_id
     List<Product> findByShopId(Long shopId);
+
+    long countByShopId(Long shopId);
 
     List<Product> findByShopIdAndProductNameContainingIgnoreCase(
             Long shopId,

@@ -70,6 +70,8 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
 
     List<Staff> findByShopId(Long shopId);
 
+    long countByShopId(Long shopId);
+
     Optional<Staff> findByIdAndShopId(Long id, Long shopId);
 
     boolean existsByEmailAndShopId(String email, Long shopId);

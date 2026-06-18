@@ -17,15 +17,13 @@
 
 package com.binhlaig.pos.auth.dto;
 
-import com.binhlaig.pos.auth.Role;
+import com.binhlaig.pos.user.BusinessType;
 
 public record RegisterMultipartRequest(
         String username,
         String password,
-        Role role,
-        Long shopId,
-        String shopCode,
         String shopName,
-        String address
+        String address,
+        BusinessType businessType
 ) {
 }

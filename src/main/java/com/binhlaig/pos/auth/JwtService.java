@@ -6,10 +6,12 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,11 +20,35 @@ import java.util.function.Function;
 @Service
 public class JwtService {
 
-    private static final String SECRET_KEY =
-            "binhlaigposbinhlaigposbinhlaigpos123456";
+    private final String jwtSecret;
+    private SecretKey signInKey;
+
+    public JwtService(@Value("${app.jwt.secret}") String jwtSecret) {
+        this.jwtSecret = jwtSecret == null ? "" : jwtSecret.trim();
+    }
+
+    @PostConstruct
+    void validateSecret() {
+        if (jwtSecret.isBlank()) {
+            throw new IllegalStateException("JWT_SECRET is required");
+        }
+
+        byte[] decoded;
+        try {
+            decoded = Base64.getDecoder().decode(jwtSecret);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException("JWT_SECRET must be a Base64-encoded HMAC key", ex);
+        }
+
+        if (decoded.length < 32) {
+            throw new IllegalStateException("JWT_SECRET must decode to at least 32 bytes");
+        }
+
+        signInKey = Keys.hmacShaKeyFor(decoded);
+    }
 
     private SecretKey getSignInKey() {
-        return Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+        return signInKey;
     }
 
     public String extractUsername(String token) {
@@ -48,9 +74,19 @@ public class JwtService {
         return role != null ? role.toString() : null;
     }
 
+    public String extractBusinessType(String token) {
+        Object businessType = extractAllClaims(token).get("businessType");
+        return businessType != null ? businessType.toString() : null;
+    }
+
     public Long extractStaffId(String token) {
         Object staffId = extractAllClaims(token).get("staffId");
         return toLong(staffId);
+    }
+
+    public Long extractAdminId(String token) {
+        Object adminId = extractAllClaims(token).get("adminId");
+        return toLong(adminId);
     }
 
     public String extractTokenType(String token) {
@@ -68,6 +104,7 @@ public class JwtService {
         claims.put("role", user.getRole().name());
         claims.put("shopId", user.getShopId());
         claims.put("shopCode", user.getShopCode());
+        claims.put("businessType", businessTypeName(user));
         claims.put("type", "USER");
 
         return createToken(claims, user.getUsername());
@@ -96,10 +133,21 @@ public class JwtService {
         claims.put("role", staff.getRole());
         claims.put("shopId", staff.getShopId());
         claims.put("shopCode", staff.getShopCode());
+        claims.put("businessType", businessTypeName(user));
         claims.put("staffId", staff.getStaffId());
         claims.put("type", "STAFF");
 
         return createToken(claims, user.getUsername());
+    }
+
+    public String generateAdminToken(Long adminId, String username, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("adminId", adminId);
+        claims.put("username", username);
+        claims.put("role", role);
+        claims.put("type", "SUPER_ADMIN");
+
+        return createToken(claims, username);
     }
 
     private String createToken(Map<String, Object> claims, String subject) {
@@ -124,6 +172,7 @@ public class JwtService {
         final String username = extractUsername(token);
 
         return username != null
+                && user != null
                 && username.equals(user.getUsername())
                 && !isTokenExpired(token);
     }
@@ -136,6 +185,20 @@ public class JwtService {
                 && staff.getStaffId() != null
                 && staffId.equals(staff.getStaffId())
                 && "STAFF".equals(tokenType)
+                && !isTokenExpired(token);
+    }
+
+    public boolean isAdminTokenValid(String token, Long adminId, String username) {
+        final Long tokenAdminId = extractAdminId(token);
+        final String tokenType = extractTokenType(token);
+        final String subject = extractUsername(token);
+
+        return adminId != null
+                && tokenAdminId != null
+                && adminId.equals(tokenAdminId)
+                && username != null
+                && username.equals(subject)
+                && "SUPER_ADMIN".equals(tokenType)
                 && !isTokenExpired(token);
     }
 
@@ -162,5 +225,9 @@ public class JwtService {
         }
 
         return Long.parseLong(value.toString());
+    }
+
+    private String businessTypeName(User user) {
+        return user.getBusinessType() == null ? "SUPERMARKET" : user.getBusinessType().name();
     }
 }

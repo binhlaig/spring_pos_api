@@ -1,6 +1,8 @@
 package com.binhlaig.pos.modules.product;
 
 import com.binhlaig.pos.modules.product.dto.ProductResponse;
+import com.binhlaig.pos.shopfeature.FeatureKey;
+import com.binhlaig.pos.shopfeature.ShopFeatureService;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -17,6 +19,7 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService service;
+    private final ShopFeatureService shopFeatureService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public List<ProductResponse> list(
@@ -35,17 +38,8 @@ public class ProductController {
             @RequestParam(value = "shopCode", required = false) String shopCode,
             @RequestParam(value = "shop_code", required = false) String shopCodeSnake
     ) {
-        Long finalUserId = firstLongFromString(
-                createdByUserId,
-                createdByUserIdSnake,
-                userId,
-                ownerId
-        );
-
-        Long finalShopId = firstLongFromString(shopId, shopIdSnake);
-        String finalShopCode = firstString(shopCode, shopCodeSnake);
-
-        return service.listMine(q, finalUserId, finalShopId, finalShopCode, authorization);
+        shopFeatureService.requireFeatureFromAuthorization(authorization, FeatureKey.PRODUCTS);
+        return service.listMine(q, null, null, null, authorization);
     }
 
     @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -53,6 +47,7 @@ public class ProductController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long id
     ) {
+        shopFeatureService.requireFeatureFromAuthorization(authorization, FeatureKey.PRODUCTS);
         return ResponseEntity.ok(service.getById(id));
     }
 
@@ -70,7 +65,8 @@ public class ProductController {
             @RequestParam(value = "product_quantity_amount", required = false) BigDecimal qty,
             @RequestParam(value = "barcode", required = false) String barcode,
             @RequestParam(value = "category", required = false) String category,
-            @RequestParam(value = "product_type", required = false) ProductType productType,
+            @RequestParam(value = "product_type", required = false) String productTypeSnake,
+            @RequestParam(value = "productType", required = false) String productTypeCamel,
             @RequestParam(value = "note", required = false) String note,
             @RequestParam(value = "product_discount", required = false) BigDecimal discount,
 
@@ -84,6 +80,8 @@ public class ProductController {
             @RequestParam(value = "shopId", required = false) String shopId,
             @RequestParam(value = "shopCode", required = false) String shopCode,
             @RequestParam(value = "createdBy", required = false) String createdBy,
+            @RequestParam(value = "businessType", required = false) String businessTypeCamel,
+            @RequestParam(value = "moduleType", required = false) String moduleTypeCamel,
 
             // snake_case fields from frontend
             @RequestParam(value = "created_by_user_id", required = false) String createdByUserIdSnake,
@@ -93,6 +91,8 @@ public class ProductController {
             @RequestParam(value = "shop_id", required = false) String shopIdSnake,
             @RequestParam(value = "shop_code", required = false) String shopCodeSnake,
             @RequestParam(value = "created_by", required = false) String createdBySnake,
+            @RequestParam(value = "business_type", required = false) String businessTypeSnake,
+            @RequestParam(value = "module_type", required = false) String moduleTypeSnake,
 
             // fallback fields
             @RequestParam(value = "userId", required = false) String userId,
@@ -103,6 +103,7 @@ public class ProductController {
             @RequestParam(value = "ownerUsername", required = false) String ownerUsername,
             @RequestParam(value = "owner_username", required = false) String ownerUsernameSnake
     ) throws Exception {
+        shopFeatureService.requireFeatureFromAuthorization(authorization, FeatureKey.PRODUCTS);
 
         if (qty == null) {
             qty = BigDecimal.ZERO;
@@ -112,8 +113,18 @@ public class ProductController {
             discount = BigDecimal.ZERO;
         }
 
-        if (productType == null) {
-            productType = ProductType.OTHER;
+        String productTypeValue = firstNonBlank(productTypeSnake, productTypeCamel);
+        ProductType productType = parseProductTypeOrOther(productTypeValue);
+
+        String businessTypeValue = firstNonBlank(
+                businessTypeSnake,
+                businessTypeCamel,
+                moduleTypeSnake,
+                moduleTypeCamel
+        );
+
+        if (businessTypeValue.isBlank()) {
+            businessTypeValue = "SUPERMARKET";
         }
 
         Long finalCreatedByUserId = firstLongFromString(
@@ -174,12 +185,12 @@ public class ProductController {
                 note,
                 image,
 
-                finalCreatedByUserId,
-                finalCreatedByUsername,
+                null,
+                null,
                 finalCreatedByName,
                 finalCreatedByRole,
-                finalShopId,
-                finalShopCode,
+                null,
+                null,
                 finalCreatedBy,
                 authorization
         );
@@ -200,7 +211,8 @@ public class ProductController {
             @RequestParam(value = "product_quantity_amount", required = false) BigDecimal qty,
             @RequestParam(value = "barcode", required = false) String barcode,
             @RequestParam(value = "category", required = false) String category,
-            @RequestParam(value = "product_type", required = false) ProductType productType,
+            @RequestParam(value = "product_type", required = false) String productTypeSnake,
+            @RequestParam(value = "productType", required = false) String productTypeCamel,
             @RequestParam(value = "note", required = false) String note,
             @RequestParam(value = "product_discount", required = false) BigDecimal discount,
             @RequestPart(value = "image", required = false) MultipartFile image,
@@ -209,11 +221,16 @@ public class ProductController {
             @RequestParam(value = "created_by_user_id", required = false) String createdByUserIdSnake,
             @RequestParam(value = "createdByUsername", required = false) String createdByUsername,
             @RequestParam(value = "created_by_username", required = false) String createdByUsernameSnake,
+            @RequestParam(value = "businessType", required = false) String businessTypeCamel,
+            @RequestParam(value = "business_type", required = false) String businessTypeSnake,
+            @RequestParam(value = "moduleType", required = false) String moduleTypeCamel,
+            @RequestParam(value = "module_type", required = false) String moduleTypeSnake,
             @RequestParam(value = "shopId", required = false) String shopId,
             @RequestParam(value = "shop_id", required = false) String shopIdSnake,
             @RequestParam(value = "shopCode", required = false) String shopCode,
             @RequestParam(value = "shop_code", required = false) String shopCodeSnake
     ) throws Exception {
+        shopFeatureService.requireFeatureFromAuthorization(authorization, FeatureKey.PRODUCTS);
 
         Long finalCreatedByUserId = firstLongFromString(
                 createdByUserId,
@@ -228,6 +245,18 @@ public class ProductController {
 
         Long finalShopId = firstLongFromString(shopId, shopIdSnake);
         String finalShopCode = firstString(shopCode, shopCodeSnake);
+        String productTypeValue = firstNonBlank(productTypeSnake, productTypeCamel);
+        ProductType productType = parseProductTypeOrOther(productTypeValue);
+        String businessTypeValue = firstNonBlank(
+                businessTypeSnake,
+                businessTypeCamel,
+                moduleTypeSnake,
+                moduleTypeCamel
+        );
+
+        if (businessTypeValue.isBlank()) {
+            businessTypeValue = "SUPERMARKET";
+        }
 
         return service.update(
                 id,
@@ -242,10 +271,10 @@ public class ProductController {
                 note,
                 image,
 
-                finalCreatedByUserId,
-                finalCreatedByUsername,
-                finalShopId,
-                finalShopCode,
+                null,
+                null,
+                null,
+                null,
                 authorization
         );
     }
@@ -255,6 +284,7 @@ public class ProductController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable Long id
     ) throws Exception {
+        shopFeatureService.requireFeatureFromAuthorization(authorization, FeatureKey.PRODUCTS);
         service.delete(id);
     }
 
@@ -307,5 +337,27 @@ public class ProductController {
         }
 
         return null;
+    }
+
+    private ProductType parseProductTypeOrOther(String value) {
+        if (value == null || value.isBlank()) {
+            return ProductType.OTHER;
+        }
+
+        try {
+            return ProductType.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return ProductType.OTHER;
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+
+        return "";
     }
 }

@@ -41,4 +41,9 @@ public class User {
 
     @Column(name = "address", length = 500)
     private String address;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "business_type", nullable = false, length = 30)
+    private BusinessType businessType = BusinessType.SUPERMARKET;
 }

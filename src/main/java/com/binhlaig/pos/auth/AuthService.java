@@ -207,14 +207,25 @@
 
 package com.binhlaig.pos.auth;
 
+import com.binhlaig.pos.admin.PlanLimitService;
+import com.binhlaig.pos.admin.Shop;
+import com.binhlaig.pos.admin.ShopRepository;
+import com.binhlaig.pos.admin.ShopStatus;
+import com.binhlaig.pos.admin.SubscriptionPlan;
+import com.binhlaig.pos.admin.dto.EffectiveLimitsResponse;
 import com.binhlaig.pos.auth.dto.AuthResponse;
 import com.binhlaig.pos.auth.dto.LoginRequest;
+import com.binhlaig.pos.auth.dto.PlanFeaturesDto;
+import com.binhlaig.pos.auth.dto.PlanLimitsDto;
 import com.binhlaig.pos.auth.dto.RegisterMultipartRequest;
 import com.binhlaig.pos.auth.dto.RegisterResponse;
 import com.binhlaig.pos.auth.dto.StaffLoginRequest;
+import com.binhlaig.pos.shopfeature.ShopFeature;
+import com.binhlaig.pos.shopfeature.ShopFeatureRepository;
 import com.binhlaig.pos.staff.entity.Staff;
 import com.binhlaig.pos.staff.repository.StaffRepository;
 import com.binhlaig.pos.storage.FileStorageService;
+import com.binhlaig.pos.user.BusinessType;
 import com.binhlaig.pos.user.User;
 import com.binhlaig.pos.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -223,6 +234,12 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -234,13 +251,16 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final FileStorageService fileStorageService;
+    private final PlanLimitService planLimitService;
+    private final ShopRepository shopRepository;
+    private final ShopFeatureRepository shopFeatureRepository;
 
     public RegisterResponse registerMultipart(RegisterMultipartRequest req, MultipartFile image) throws Exception {
         String username = req.username() == null ? "" : req.username().trim();
         String password = req.password() == null ? "" : req.password().trim();
-        String shopCode = req.shopCode() == null ? "" : req.shopCode().trim().toUpperCase();
         String shopName = req.shopName() == null ? "" : req.shopName().trim();
         String address = req.address() == null ? "" : req.address().trim();
+        BusinessType businessType = req.businessType() == null ? BusinessType.SUPERMARKET : req.businessType();
 
         if (username.isBlank()) {
             throw new RuntimeException("Username is required");
@@ -248,14 +268,6 @@ public class AuthService {
 
         if (password.isBlank() || password.length() < 8) {
             throw new RuntimeException("Password must be at least 8 characters");
-        }
-
-        if (req.shopId() == null || req.shopId() <= 0) {
-            throw new RuntimeException("Valid shop ID is required");
-        }
-
-        if (shopCode.isBlank()) {
-            throw new RuntimeException("Shop code is required");
         }
 
         if (shopName.isBlank()) {
@@ -276,14 +288,17 @@ public class AuthService {
             imageUrl = fileStorageService.saveAvatarImage(image);
         }
 
+        Shop shop = createShop(shopName, address, businessType);
+
         User user = User.builder()
                 .username(username)
                 .password(passwordEncoder.encode(password))
-                .role(req.role())
-                .shopId(req.shopId())
-                .shopCode(shopCode)
+                .role(Role.ADMIN)
+                .shopId(shop.getId())
+                .shopCode(shop.getShopCode())
                 .shopName(shopName)
                 .address(address)
+                .businessType(businessType)
                 .imageUrl(imageUrl)
                 .build();
 
@@ -297,8 +312,44 @@ public class AuthService {
                 .shopCode(user.getShopCode())
                 .shopName(user.getShopName())
                 .address(user.getAddress())
+                .businessType(businessTypeName(user))
                 .imageUrl(user.getImageUrl())
                 .build();
+    }
+
+    private Shop createShop(String shopName, String address, BusinessType businessType) {
+        Long nextId = shopRepository.findMaxId() + 1;
+        String shopCode = generateShopCode(shopName);
+
+        while (shopRepository.existsByShopCode(shopCode)) {
+            shopCode = generateShopCode(shopName);
+        }
+
+        Shop shop = Shop.builder()
+                .id(nextId)
+                .shopCode(shopCode)
+                .shopName(shopName)
+                .address(address)
+                .businessType(businessType.name())
+                .status(ShopStatus.TRIAL)
+                .subscriptionPlan("TRIAL")
+                .subscriptionStartDate(LocalDate.now())
+                .subscriptionEndDate(LocalDate.now().plusDays(14))
+                .updatedAt(OffsetDateTime.now())
+                .build();
+
+        return shopRepository.save(shop);
+    }
+
+    private String generateShopCode(String shopName) {
+        String prefix = shopName == null ? "SHOP" : shopName.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
+        if (prefix.length() > 6) {
+            prefix = prefix.substring(0, 6);
+        }
+        if (prefix.isBlank()) {
+            prefix = "SHOP";
+        }
+        return prefix + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(Locale.ROOT);
     }
 
     public AuthResponse login(LoginRequest req) {
@@ -331,6 +382,7 @@ public class AuthService {
             throw new RuntimeException("Invalid shop code");
         }
 
+        PlanInfo planInfo = loadPlanInfo(user.getShopId());
         String token = jwtService.generateToken(user);
 
         return AuthResponse.builder()
@@ -340,7 +392,13 @@ public class AuthService {
                 .role(user.getRole().name())
                 .shopId(user.getShopId())
                 .shopCode(user.getShopCode())
+                .businessType(businessTypeName(user))
                 .imageUrl(user.getImageUrl())
+                .shopStatus(planInfo.shopStatus())
+                .subscriptionPlan(planInfo.subscriptionPlan())
+                .subscriptionEndDate(planInfo.subscriptionEndDate())
+                .features(planInfo.features())
+                .limits(planInfo.limits())
                 .build();
     }
 
@@ -383,6 +441,7 @@ public class AuthService {
             throw new RuntimeException("Staff does not belong to this shop");
         }
 
+        PlanInfo planInfo = loadPlanInfo(staff.getShopId());
         String token = jwtService.generateStaffToken(staff, user);
 
         return AuthResponse.builder()
@@ -392,8 +451,75 @@ public class AuthService {
                 .role(staff.getRole())
                 .shopId(staff.getShopId())
                 .shopCode(staff.getShopCode())
+                .businessType(businessTypeName(user))
                 .staffId(staff.getStaffId())
                 .imageUrl(staff.getImageUrl())
+                .shopStatus(planInfo.shopStatus())
+                .subscriptionPlan(planInfo.subscriptionPlan())
+                .subscriptionEndDate(planInfo.subscriptionEndDate())
+                .features(planInfo.features())
+                .limits(planInfo.limits())
                 .build();
+    }
+
+    private String businessTypeName(User user) {
+        return user.getBusinessType() == null ? BusinessType.SUPERMARKET.name() : user.getBusinessType().name();
+    }
+
+    private PlanInfo loadPlanInfo(Long shopId) {
+        if (shopId == null) {
+            throw new RuntimeException("Shop ID not found for user");
+        }
+        Shop shop = planLimitService.findShop(shopId);
+        planLimitService.assertShopCanUsePos(shopId);
+        SubscriptionPlan plan = planLimitService.getCurrentPlan(shopId);
+        EffectiveLimitsResponse limits = planLimitService.getEffectiveLimits(shopId);
+        return new PlanInfo(
+                shop.getStatus() == null ? null : shop.getStatus().name(),
+                shop.getSubscriptionPlan(),
+                shop.getSubscriptionEndDate(),
+                featuresFrom(shopId, shop.getShopCode(), plan),
+                PlanLimitsDto.from(limits)
+        );
+    }
+
+    private PlanFeaturesDto featuresFrom(Long shopId, String shopCode, SubscriptionPlan plan) {
+        PlanFeaturesDto features = PlanFeaturesDto.from(plan);
+        findShopFeature(shopId, shopCode).ifPresent(feature -> applyShopFeatureGates(features, feature));
+        return features;
+    }
+
+    private Optional<ShopFeature> findShopFeature(Long shopId, String shopCode) {
+        Optional<ShopFeature> byShopId = shopId == null
+                ? Optional.empty()
+                : shopFeatureRepository.findByShopId(shopId);
+        if (byShopId.isPresent()) {
+            return byShopId;
+        }
+        if (shopCode == null || shopCode.isBlank()) {
+            return Optional.empty();
+        }
+        return shopFeatureRepository.findByShopCode(shopCode.trim());
+    }
+
+    private void applyShopFeatureGates(PlanFeaturesDto features, ShopFeature feature) {
+        if (feature.getAllowRestaurant() != null) {
+            features.setAllowRestaurant(feature.getAllowRestaurant());
+        }
+        if (feature.getAllowKitchen() != null) {
+            features.setAllowKitchen(feature.getAllowKitchen());
+        }
+        if (feature.getAllowTableOrder() != null) {
+            features.setAllowTableOrder(feature.getAllowTableOrder());
+        }
+    }
+
+    private record PlanInfo(
+            String shopStatus,
+            String subscriptionPlan,
+            java.time.LocalDate subscriptionEndDate,
+            PlanFeaturesDto features,
+            PlanLimitsDto limits
+    ) {
     }
 }

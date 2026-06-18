@@ -2,24 +2,30 @@
 
 package com.binhlaig.pos.staff.service;
 
+import com.binhlaig.pos.admin.PlanLimitService;
 import com.binhlaig.pos.auth.JwtService;
 import com.binhlaig.pos.staff.dto.StaffRequest;
 import com.binhlaig.pos.staff.dto.StaffResponse;
 import com.binhlaig.pos.staff.entity.Staff;
 import com.binhlaig.pos.staff.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StaffServiceImpl implements StaffService {
 
     private final StaffRepository staffRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final PlanLimitService planLimitService;
 
     private Long extractShopId(String authorizationHeader) {
         if (authorizationHeader == null || authorizationHeader.isBlank()) {
@@ -63,6 +69,7 @@ public class StaffServiceImpl implements StaffService {
     public StaffResponse createStaff(StaffRequest request, String authorizationHeader) {
         Long shopId = extractShopId(authorizationHeader);
         String shopCode = extractShopCode(authorizationHeader);
+        planLimitService.assertCanCreateStaff(shopId);
 
         if (request.getEmail() != null &&
                 staffRepository.existsByEmailAndShopId(request.getEmail(), shopId)) {
@@ -168,9 +175,20 @@ public class StaffServiceImpl implements StaffService {
     @Override
     public StaffResponse getStaffByStaffId(Long staffId, String authorizationHeader) {
         Long shopId = extractShopId(authorizationHeader);
+        String shopCode = extractShopCode(authorizationHeader);
+
+        log.info(
+                "Staff lookup by staffId requested. staffId={}, shopId={}, shopCode={}",
+                staffId,
+                shopId,
+                shopCode
+        );
 
         Staff staff = staffRepository.findByStaffIdAndShopId(staffId, shopId)
-                .orElseThrow(() -> new RuntimeException("Staff not found"));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Staff not found"
+                ));
 
         return mapToResponse(staff);
     }

@@ -275,17 +275,14 @@ public class TimecardService {
     private final JwtService jwtService;
 
     @Transactional(readOnly = true)
-    public List<TimecardShiftResponse> getShifts(Long employeeId, Long shopId) {
+    public List<TimecardShiftResponse> getShifts(Long employeeId, String authorizationHeader) {
+        SessionInfo sessionInfo = extractSessionInfo(authorizationHeader);
         List<TimecardShift> shifts;
 
-        if (employeeId != null && shopId != null) {
-            shifts = shiftRepository.findByEmployeeIdAndShopIdWithBreaksOrderByClockInTimeDesc(employeeId, shopId);
-        } else if (employeeId != null) {
-            shifts = shiftRepository.findByEmployeeIdWithBreaksOrderByClockInTimeDesc(employeeId);
-        } else if (shopId != null) {
-            shifts = shiftRepository.findByShopIdWithBreaksOrderByClockInTimeDesc(shopId);
+        if (employeeId != null) {
+            shifts = shiftRepository.findByEmployeeIdAndShopIdWithBreaksOrderByClockInTimeDesc(employeeId, sessionInfo.shopId());
         } else {
-            shifts = shiftRepository.findAllWithBreaksOrderByClockInTimeDesc();
+            shifts = shiftRepository.findByShopIdWithBreaksOrderByClockInTimeDesc(sessionInfo.shopId());
         }
 
         return shifts.stream().map(this::toResponse).toList();
@@ -338,8 +335,9 @@ public class TimecardService {
     }
 
     @Transactional
-    public TimecardShiftResponse clockOut(Long shiftId) {
-        TimecardShift shift = shiftRepository.findById(shiftId)
+    public TimecardShiftResponse clockOut(Long shiftId, String authorizationHeader) {
+        SessionInfo sessionInfo = extractSessionInfo(authorizationHeader);
+        TimecardShift shift = shiftRepository.findByIdAndShopId(shiftId, sessionInfo.shopId())
                 .orElseThrow(() -> new RuntimeException("Shift not found"));
 
         if (shift.getClockOutTime() != null) {
@@ -360,8 +358,9 @@ public class TimecardService {
     }
 
     @Transactional
-    public TimecardShiftResponse startBreak(Long shiftId) {
-        TimecardShift shift = shiftRepository.findById(shiftId)
+    public TimecardShiftResponse startBreak(Long shiftId, String authorizationHeader) {
+        SessionInfo sessionInfo = extractSessionInfo(authorizationHeader);
+        TimecardShift shift = shiftRepository.findByIdAndShopId(shiftId, sessionInfo.shopId())
                 .orElseThrow(() -> new RuntimeException("Shift not found"));
 
         if (shift.getClockOutTime() != null) {
@@ -390,8 +389,9 @@ public class TimecardService {
     }
 
     @Transactional
-    public TimecardShiftResponse endBreak(Long shiftId) {
-        shiftRepository.findById(shiftId)
+    public TimecardShiftResponse endBreak(Long shiftId, String authorizationHeader) {
+        SessionInfo sessionInfo = extractSessionInfo(authorizationHeader);
+        shiftRepository.findByIdAndShopId(shiftId, sessionInfo.shopId())
                 .orElseThrow(() -> new RuntimeException("Shift not found"));
 
         TimecardBreak br = breakRepository.findFirstByShiftIdAndEndTimeIsNullOrderByStartTimeDesc(shiftId)
@@ -400,7 +400,7 @@ public class TimecardService {
         br.setEndTime(LocalDateTime.now());
         breakRepository.save(br);
 
-        TimecardShift reloaded = shiftRepository.findById(shiftId)
+        TimecardShift reloaded = shiftRepository.findByIdAndShopId(shiftId, sessionInfo.shopId())
                 .orElseThrow(() -> new RuntimeException("Shift not found"));
 
         return toResponse(reloaded);

@@ -1,5 +1,6 @@
 package com.binhlaig.pos.modules.product;
 
+import com.binhlaig.pos.admin.PlanLimitService;
 import com.binhlaig.pos.modules.product.dto.ProductResponse;
 import com.binhlaig.pos.storage.FileStorageService;
 import com.binhlaig.pos.user.User;
@@ -25,23 +26,14 @@ public class ProductService {
     private final FileStorageService storage;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final PlanLimitService planLimitService;
 
     // ─────────────────────────────────────────────────────────────
     // OLD list - keep for compatibility
     // ─────────────────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public List<ProductResponse> list(String q) {
-        if (q != null && !q.trim().isEmpty()) {
-            return repo.findByProductNameContainingIgnoreCase(q.trim())
-                    .stream()
-                    .map(ProductResponse::from)
-                    .toList();
-        }
-
-        return repo.findAll()
-                .stream()
-                .map(ProductResponse::from)
-                .toList();
+        return listMine(q, null, null, null, null);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -56,57 +48,16 @@ public class ProductService {
             String authorization
     ) {
         User currentUser = getCurrentUserOrNull();
-
-        Long finalUserId = createdByUserId;
-        Long finalShopId = shopId;
-        String finalShopCode = cleanNullable(shopCode);
-
-        /*
-         * Controller/Frontend က userId မပို့နိုင်ရင်
-         * SecurityContext ထဲက username နဲ့ users table ကိုရှာပြီး
-         * real users.id / shop_id / shop_code ကိုသုံးမယ်။
-         */
-        if (currentUser != null) {
-            if (finalUserId == null) {
-                finalUserId = currentUser.getId();
-            }
-
-            if (finalShopId == null) {
-                finalShopId = currentUser.getShopId();
-            }
-
-            if (finalShopCode == null) {
-                finalShopCode = currentUser.getShopCode();
-            }
-        }
+        Long finalShopId = requireCurrentShopId(currentUser);
 
         List<Product> products;
 
         boolean hasSearch = q != null && !q.trim().isEmpty();
         String keyword = hasSearch ? q.trim() : null;
 
-        if (finalUserId != null) {
-            products = hasSearch
-                    ? repo.findByCreatedByUserIdAndProductNameContainingIgnoreCase(finalUserId, keyword)
-                    : repo.findByCreatedByUserId(finalUserId);
-
-        } else if (finalShopId != null) {
-            products = hasSearch
-                    ? repo.findByShopIdAndProductNameContainingIgnoreCase(finalShopId, keyword)
-                    : repo.findByShopId(finalShopId);
-
-        } else if (finalShopCode != null && !finalShopCode.isBlank()) {
-            products = hasSearch
-                    ? repo.findByShopCodeAndProductNameContainingIgnoreCase(finalShopCode, keyword)
-                    : repo.findByShopCode(finalShopCode);
-
-        } else {
-            /*
-             * Security အတွက် user/shop မသိရင် empty list ပြန်ပေးတာက ပိုကောင်းပါတယ်။
-             * အရင်လို repo.findAll() ပြန်ပေးရင် user အကုန် product မြင်နိုင်ပါတယ်။
-             */
-            products = List.of();
-        }
+        products = hasSearch
+                ? repo.findByShopIdAndProductNameContainingIgnoreCase(finalShopId, keyword)
+                : repo.findByShopId(finalShopId);
 
         return products.stream()
                 .map(ProductResponse::from)
@@ -142,7 +93,11 @@ public class ProductService {
         String finalSku = cleanRequired(sku, "SKU");
         String finalProductName = cleanRequired(productName, "Product name");
 
-        if (repo.existsBySku(finalSku)) {
+        User currentUser = getCurrentUserOrNull();
+        Long finalShopId = requireCurrentShopId(currentUser);
+        String finalShopCode = cleanNullable(currentUser.getShopCode());
+
+        if (repo.existsBySkuAndShopId(finalSku, finalShopId)) {
             throw new IllegalArgumentException("SKU already exists");
         }
 
@@ -151,27 +106,10 @@ public class ProductService {
             imagePath = storage.saveProductImage(image);
         }
 
-        /*
-         * အရေးကြီး:
-         * frontend ကပို့တဲ့ createdByUserId ကို မယုံဘဲ
-         * backend login user ကနေ real numeric users.id ကိုယူမယ်။
-         */
-        User currentUser = getCurrentUserOrNull();
-
-        Long finalCreatedByUserId = createdByUserId;
-        String finalCreatedByUsername = cleanNullable(createdByUsername);
-        String finalCreatedByName = cleanNullable(createdByName);
-        String finalCreatedByRole = cleanNullable(createdByRole);
-        Long finalShopId = shopId;
-        String finalShopCode = cleanNullable(shopCode);
-
-        if (currentUser != null) {
-            finalCreatedByUserId = currentUser.getId();
-            finalCreatedByUsername = currentUser.getUsername();
-            finalCreatedByName = currentUser.getUsername();
-            finalShopId = currentUser.getShopId();
-            finalShopCode = currentUser.getShopCode();
-        }
+        Long finalCreatedByUserId = currentUser.getId();
+        String finalCreatedByUsername = currentUser.getUsername();
+        String finalCreatedByName = currentUser.getUsername();
+        String finalCreatedByRole = getCurrentRoleOrDefault();
 
         /*
          * User entity ထဲမှာ getRoles() မရှိလို့ currentUser.getRoles() မသုံးပါ။
@@ -179,11 +117,7 @@ public class ProductService {
          * မပို့လာရင် SecurityContext authorities ထဲကယူမယ်။
          * မရရင် USER default ထားမယ်။
          */
-        finalCreatedByRole = cleanNullable(finalCreatedByRole);
-
-        if (finalCreatedByRole == null) {
-            finalCreatedByRole = getCurrentRoleOrDefault();
-        }
+        planLimitService.assertCanCreateProduct(finalShopId);
 
         String finalCreatedByJson = buildCreatedByJson(
                 createdBy,
@@ -284,13 +218,14 @@ public class ProductService {
             String authorization
     ) throws Exception {
 
-        Product p = repo.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + id));
+        User currentUser = getCurrentUserOrNull();
+        Long currentShopId = currentUser == null ? null : currentUser.getShopId();
+        Product p = findProductForCurrentShop(id, currentShopId);
 
         if (sku != null && !sku.trim().isEmpty()) {
             String newSku = sku.trim();
 
-            if (!newSku.equals(p.getSku()) && repo.existsBySku(newSku)) {
+            if (!newSku.equals(p.getSku()) && repo.existsBySkuAndShopId(newSku, currentShopId)) {
                 throw new IllegalArgumentException("SKU already exists");
             }
 
@@ -335,22 +270,6 @@ public class ProductService {
          * update မှာ owner info ပို့လာမှ update လုပ်မယ်။
          * မပို့ရင် မူလ owner မပျက်စေဘူး။
          */
-        if (createdByUserId != null) {
-            p.setCreatedByUserId(createdByUserId);
-        }
-
-        if (createdByUsername != null) {
-            p.setCreatedByUsername(cleanNullable(createdByUsername));
-        }
-
-        if (shopId != null) {
-            p.setShopId(shopId);
-        }
-
-        if (shopCode != null) {
-            p.setShopCode(cleanNullable(shopCode));
-        }
-
         if (image != null && !image.isEmpty()) {
             String imagePath = storage.saveProductImage(image);
             p.setImagePath(imagePath);
@@ -402,8 +321,8 @@ public class ProductService {
     // ─────────────────────────────────────────────────────────────
     @Transactional
     public void delete(Long id) throws Exception {
-        Product p = repo.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + id));
+        User currentUser = getCurrentUserOrNull();
+        Product p = findProductForCurrentShop(id, currentUser == null ? null : currentUser.getShopId());
 
         // FileStorageService မှာ delete method ရှိရင် ဖွင့်သုံးနိုင်ပါတယ်။
         // storage.delete(p.getImagePath());
@@ -416,10 +335,30 @@ public class ProductService {
     // ─────────────────────────────────────────────────────────────
     @Transactional(readOnly = true)
     public ProductResponse getById(Long id) {
-        Product product = repo.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + id));
+        User currentUser = getCurrentUserOrNull();
+        Product product = findProductForCurrentShop(id, currentUser == null ? null : currentUser.getShopId());
 
         return ProductResponse.from(product);
+    }
+
+    private Product findProductForCurrentShop(Long id, Long shopId) {
+        Long requiredShopId = requireCurrentShopId(shopId);
+        return repo.findByIdAndShopId(id, requiredShopId)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + id));
+    }
+
+    private Long requireCurrentShopId(User user) {
+        if (user == null || user.getShopId() == null) {
+            throw new IllegalArgumentException("Current shop is required");
+        }
+        return user.getShopId();
+    }
+
+    private Long requireCurrentShopId(Long shopId) {
+        if (shopId == null) {
+            throw new IllegalArgumentException("Current shop is required");
+        }
+        return shopId;
     }
 
     // ─────────────────────────────────────────────────────────────

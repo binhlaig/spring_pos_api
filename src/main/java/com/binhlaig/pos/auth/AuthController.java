@@ -75,6 +75,7 @@ import com.binhlaig.pos.auth.dto.LoginRequest;
 import com.binhlaig.pos.auth.dto.RegisterMultipartRequest;
 import com.binhlaig.pos.auth.dto.RegisterResponse;
 import com.binhlaig.pos.auth.dto.StaffLoginRequest;
+import com.binhlaig.pos.user.BusinessType;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -92,21 +93,17 @@ public class AuthController {
     public RegisterResponse register(
             @RequestParam("username") String username,
             @RequestParam("password") String password,
-            @RequestParam("role") String role,
-            @RequestParam("shopId") Long shopId,
-            @RequestParam("shopCode") String shopCode,
             @RequestParam("shopName") String shopName,
             @RequestParam("address") String address,
+            @RequestParam(value = "businessType", required = false) String businessType,
             @RequestParam(value = "image", required = false) MultipartFile image
     ) throws Exception {
         var req = new RegisterMultipartRequest(
                 username,
                 password,
-                Role.valueOf(role),
-                shopId,
-                shopCode,
                 shopName,
-                address
+                address,
+                parseBusinessType(businessType)
         );
 
         return service.registerMultipart(req, image);
@@ -120,5 +117,13 @@ public class AuthController {
     @PostMapping("/staff/login")
     public AuthResponse staffLogin(@RequestBody @Valid StaffLoginRequest req) {
         return service.staffLogin(req);
+    }
+
+    private BusinessType parseBusinessType(String businessType) {
+        if (businessType == null || businessType.isBlank()) {
+            return BusinessType.SUPERMARKET;
+        }
+
+        return BusinessType.valueOf(businessType.trim().toUpperCase());
     }
 }

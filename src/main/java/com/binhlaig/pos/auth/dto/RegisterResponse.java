@@ -39,6 +39,7 @@ public class RegisterResponse {
     private String shopCode;
     private String shopName;
     private String address;
+    private String businessType;
 
     private String imageUrl;
 }

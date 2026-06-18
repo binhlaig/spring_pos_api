@@ -2,6 +2,8 @@
 
 package com.binhlaig.pos.staff.controller;
 
+import com.binhlaig.pos.shopfeature.FeatureKey;
+import com.binhlaig.pos.shopfeature.ShopFeatureService;
 import com.binhlaig.pos.staff.dto.StaffRequest;
 import com.binhlaig.pos.staff.dto.StaffResponse;
 import com.binhlaig.pos.staff.service.StaffService;
@@ -10,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -19,27 +22,31 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/staff")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class StaffController {
 
     private final StaffService staffService;
     private final FileStorageService fileStorageService;
+    private final ShopFeatureService shopFeatureService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
     public ResponseEntity<StaffResponse> createStaff(
             @RequestBody StaffRequest request,
             @RequestHeader("Authorization") String authorizationHeader
     ) {
+        requireStaffFeature(authorizationHeader);
         StaffResponse response = staffService.createStaff(request, authorizationHeader);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping(value = "/with-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
     public ResponseEntity<StaffResponse> createStaffWithImage(
             @RequestPart("data") StaffRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file,
             @RequestHeader("Authorization") String authorizationHeader
     ) throws IOException {
+        requireStaffFeature(authorizationHeader);
 
         if (file != null && !file.isEmpty()) {
             String imageUrl = fileStorageService.saveStaffImage(file);
@@ -51,22 +58,26 @@ public class StaffController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
     public ResponseEntity<StaffResponse> updateStaff(
             @PathVariable Long id,
             @RequestBody StaffRequest request,
             @RequestHeader("Authorization") String authorizationHeader
     ) {
+        requireStaffFeature(authorizationHeader);
         StaffResponse response = staffService.updateStaff(id, request, authorizationHeader);
         return ResponseEntity.ok(response);
     }
 
     @PutMapping(value = "/with-image/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
     public ResponseEntity<StaffResponse> updateStaffWithImage(
             @PathVariable Long id,
             @RequestPart("data") StaffRequest request,
             @RequestPart(value = "file", required = false) MultipartFile file,
             @RequestHeader("Authorization") String authorizationHeader
     ) throws IOException {
+        requireStaffFeature(authorizationHeader);
 
         StaffResponse existing = staffService.getStaffById(id, authorizationHeader);
 
@@ -90,6 +101,7 @@ public class StaffController {
             @PathVariable Long id,
             @RequestHeader("Authorization") String authorizationHeader
     ) {
+        requireStaffFeature(authorizationHeader);
         StaffResponse response = staffService.getStaffById(id, authorizationHeader);
         return ResponseEntity.ok(response);
     }
@@ -99,6 +111,7 @@ public class StaffController {
             @PathVariable Long staffId,
             @RequestHeader("Authorization") String authorizationHeader
     ) {
+        requireStaffFeature(authorizationHeader);
         StaffResponse response = staffService.getStaffByStaffId(staffId, authorizationHeader);
         return ResponseEntity.ok(response);
     }
@@ -107,15 +120,18 @@ public class StaffController {
     public ResponseEntity<List<StaffResponse>> getAllStaff(
             @RequestHeader("Authorization") String authorizationHeader
     ) {
+        requireStaffFeature(authorizationHeader);
         List<StaffResponse> response = staffService.getAllStaff(authorizationHeader);
         return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','OWNER')")
     public ResponseEntity<String> deleteStaff(
             @PathVariable Long id,
             @RequestHeader("Authorization") String authorizationHeader
     ) throws IOException {
+        requireStaffFeature(authorizationHeader);
 
         StaffResponse existing = staffService.getStaffById(id, authorizationHeader);
 
@@ -126,5 +142,9 @@ public class StaffController {
         staffService.deleteStaff(id, authorizationHeader);
 
         return ResponseEntity.ok("Staff deleted successfully");
+    }
+
+    private void requireStaffFeature(String authorizationHeader) {
+        shopFeatureService.requireFeatureFromAuthorization(authorizationHeader, FeatureKey.STAFF);
     }
 }

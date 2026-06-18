@@ -80,6 +80,8 @@ import com.binhlaig.pos.receipt.dto.ReceiptCreateRequest;
 import com.binhlaig.pos.receipt.dto.ReceiptListResponse;
 import com.binhlaig.pos.receipt.dto.ReceiptResponse;
 import com.binhlaig.pos.receipt.service.PosReceiptService;
+import com.binhlaig.pos.shopfeature.FeatureKey;
+import com.binhlaig.pos.shopfeature.ShopFeatureService;
 import com.binhlaig.pos.user.User;
 import com.binhlaig.pos.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -95,6 +97,7 @@ public class PosReceiptController {
 
     private final PosReceiptService receiptService;
     private final UserRepository userRepository;
+    private final ShopFeatureService shopFeatureService;
 
     @PostMapping
     public ReceiptResponse createReceipt(
@@ -102,12 +105,14 @@ public class PosReceiptController {
             Authentication authentication
     ) {
         AuthenticatedUserInfo userInfo = getLoginUserInfo(authentication);
+        shopFeatureService.requireFeature(userInfo.getShopId(), userInfo.getShopCode(), FeatureKey.POS_REGISTER);
         return receiptService.createReceipt(request, userInfo);
     }
 
     @GetMapping("/my")
     public List<ReceiptListResponse> getMyReceipts(Authentication authentication) {
         AuthenticatedUserInfo userInfo = getLoginUserInfo(authentication);
+        shopFeatureService.requireFeature(userInfo.getShopId(), userInfo.getShopCode(), FeatureKey.RECEIPTS);
         return receiptService.getMyReceipts(userInfo);
     }
 
@@ -117,6 +122,7 @@ public class PosReceiptController {
             Authentication authentication
     ) {
         AuthenticatedUserInfo userInfo = getLoginUserInfo(authentication);
+        shopFeatureService.requireFeature(userInfo.getShopId(), userInfo.getShopCode(), FeatureKey.RECEIPTS);
         return receiptService.getReceiptByNo(receiptNo, userInfo);
     }
 

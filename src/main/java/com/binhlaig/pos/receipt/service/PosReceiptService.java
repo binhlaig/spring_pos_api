@@ -1,6 +1,7 @@
 
 package com.binhlaig.pos.receipt.service;
 
+import com.binhlaig.pos.admin.PlanLimitService;
 import com.binhlaig.pos.modules.product.Product;
 import com.binhlaig.pos.modules.product.ProductRepository;
 import com.binhlaig.pos.receipt.dto.AuthenticatedUserInfo;
@@ -27,6 +28,7 @@ public class PosReceiptService {
 
     private final PosReceiptRepository receiptRepository;
     private final ProductRepository productRepository;
+    private final PlanLimitService planLimitService;
 
     @Transactional
     public ReceiptResponse createReceipt(
@@ -34,16 +36,18 @@ public class PosReceiptService {
             AuthenticatedUserInfo userInfo
     ) {
         if (request == null) {
-            throw new RuntimeException("Receipt request is empty.");
+            throw new IllegalArgumentException("Receipt request is empty.");
         }
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
-            throw new RuntimeException("Receipt items are empty.");
+            throw new IllegalArgumentException("Receipt items are empty.");
         }
 
         if (userInfo == null || userInfo.getShopId() == null) {
-            throw new RuntimeException("Shop info not found.");
+            throw new IllegalArgumentException("Shop info not found.");
         }
+
+        planLimitService.assertCanCreateReceipt(userInfo.getShopId());
 
         PosReceipt receipt = PosReceipt.builder()
                 .receiptNo(generateReceiptNo())
@@ -99,13 +103,13 @@ public class PosReceiptService {
             Long shopId
     ) {
         if (item == null) {
-            throw new RuntimeException("Receipt item is empty.");
+            throw new IllegalArgumentException("Receipt item is empty.");
         }
 
         String rawProductId = item.getProductId();
 
         if (rawProductId == null || rawProductId.trim().isEmpty()) {
-            throw new RuntimeException("productId is required.");
+            throw new IllegalArgumentException("productId is required.");
         }
 
         Long productId;
@@ -113,28 +117,28 @@ public class PosReceiptService {
         try {
             productId = Long.valueOf(rawProductId.trim());
         } catch (NumberFormatException e) {
-            throw new RuntimeException("Invalid productId: " + rawProductId);
+            throw new IllegalArgumentException("Invalid productId: " + rawProductId);
         }
 
         Product product = productRepository
                 .findByIdAndShopIdForUpdate(productId, shopId)
-                .orElseThrow(() -> new RuntimeException("Product not found in this shop."));
+                .orElseThrow(() -> new IllegalArgumentException("Product not found in this shop."));
 
         int soldQty = item.getQty() == null ? 1 : item.getQty();
 
         if (soldQty <= 0) {
-            throw new RuntimeException("Qty must be greater than 0.");
+            throw new IllegalArgumentException("Qty must be greater than 0.");
         }
 
         BigDecimal currentStock = nullToZero(product.getProductQuantityAmount());
         BigDecimal soldQtyValue = BigDecimal.valueOf(soldQty);
 
         if (currentStock.compareTo(soldQtyValue) < 0) {
-            throw new RuntimeException(
+            throw new IllegalArgumentException(
                     product.getProductName()
-                            + " stock မလုံလောက်ပါ။ Current stock: "
-                            + currentStock
-                            + ", Sale qty: "
+                            + " stock မလုံလောက်ပါ။ Available: "
+                            + formatQuantity(currentStock)
+                            + ", Cart: "
                             + soldQty
             );
         }
@@ -195,16 +199,16 @@ public class PosReceiptService {
             AuthenticatedUserInfo userInfo
     ) {
         if (receiptNo == null || receiptNo.trim().isEmpty()) {
-            throw new RuntimeException("Receipt No is required.");
+            throw new IllegalArgumentException("Receipt No is required.");
         }
 
         if (userInfo == null || userInfo.getShopId() == null) {
-            throw new RuntimeException("Shop info not found.");
+            throw new IllegalArgumentException("Shop info not found.");
         }
 
         PosReceipt receipt = receiptRepository
                 .findByReceiptNoAndShopId(receiptNo.trim(), userInfo.getShopId())
-                .orElseThrow(() -> new RuntimeException("Receipt not found."));
+                .orElseThrow(() -> new IllegalArgumentException("Receipt not found."));
 
         return toListResponse(receipt);
     }
@@ -278,9 +282,13 @@ public class PosReceiptService {
 
     private String requiredText(String value, String fieldName) {
         if (value == null || value.trim().isEmpty()) {
-            throw new RuntimeException(fieldName + " is required.");
+            throw new IllegalArgumentException(fieldName + " is required.");
         }
 
         return value.trim();
+    }
+
+    private String formatQuantity(BigDecimal value) {
+        return nullToZero(value).stripTrailingZeros().toPlainString();
     }
 }

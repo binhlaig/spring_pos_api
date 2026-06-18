@@ -1,5 +1,9 @@
 HELP.md
 target/
+uploads/
+logs/
+*.log
+application-prod.properties
 .mvn/wrapper/maven-wrapper.jar
 .env
 .env.*
